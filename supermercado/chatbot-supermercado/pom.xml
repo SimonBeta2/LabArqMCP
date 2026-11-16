@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<!--
+	  Diferencias con el POM de la guía (y por qué):
+	  - La guía mezcla google-adk 0.6.0 con google-adk-dev 1.0.0. Se alinean ambos a 1.14.0:
+	    las versiones 1.0.0 se quedan colgadas con los modelos Gemini actuales.
+	  - Se quita el parent spring-boot-starter-parent 3.5.16: google-adk-dev 1.14.0 trae su
+	    propio Spring Boot (4.x) para AdkWebServer y el parent 3.5 le imponía versiones
+	    incompatibles (NoClassDefFoundError al arrancar). El agente no es una app Spring propia.
+	-->
+	<groupId>com.udea</groupId>
+	<artifactId>chatbot-supermercado</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<name>Chatbot Supermercado (Google ADK)</name>
+
+	<properties>
+		<maven.compiler.release>21</maven.compiler.release>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<google-adk.version>1.14.0</google-adk.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.google.adk</groupId>
+			<artifactId>google-adk</artifactId>
+			<version>${google-adk.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.google.adk</groupId>
+			<artifactId>google-adk-dev</artifactId>
+			<version>${google-adk.version}</version>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.14.0</version>
+			</plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.2.0</version>
+				<executions>
+					<execution>
+						<id>runAdkWebServer</id>
+						<goals>
+							<goal>java</goal>
+						</goals>
+						<configuration>
+							<mainClass>com.google.adk.web.AdkWebServer</mainClass>
+							<includeProjectDependencies>true</includeProjectDependencies>
+							<includePluginDependencies>false</includePluginDependencies>
+							<arguments>
+								<argument>--adk.agents.source-dir=target</argument>
+								<argument>--server.port=8081</argument>
+							</arguments>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>

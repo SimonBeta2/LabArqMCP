@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Merca · Pedidos a domicilio</title>
+<style>
+  :root {
+    --fondo: #f3f5f1; --panel: #ffffff; --tinta: #1c2a22; --suave: #5d6b62;
+    --marca: #1f7a4d; --marca-tinta: #ffffff; --usuario: #dff1e6; --borde: #dbe2dc;
+    --chip: #eef2ee; --error: #a3302a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #121814; --panel: #1b231e; --tinta: #e7eee9; --suave: #9aa9a0;
+      --marca: #3fa56f; --marca-tinta: #0c130f; --usuario: #24402f; --borde: #2c3a32;
+      --chip: #232d27; --error: #f08b84;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--fondo); color: var(--tinta);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center;
+  }
+  .app { width: 100%; max-width: 760px; height: 100dvh; display: flex; flex-direction: column; }
+  header { padding: 16px; border-bottom: 1px solid var(--borde); }
+  header h1 { margin: 0; font-size: 1.15rem; }
+  header p { margin: 2px 0 0; color: var(--suave); font-size: .875rem; }
+  #chat { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; overflow-wrap: anywhere; }
+  .msg p { margin: 0 0 .5em; } .msg p:last-child { margin-bottom: 0; }
+  .msg ul { margin: .25em 0 .5em; padding-left: 1.2em; }
+  .bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--borde); border-bottom-left-radius: 4px; }
+  .yo { align-self: flex-end; background: var(--usuario); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+  .error { align-self: flex-start; color: var(--error); border: 1px solid currentColor; background: transparent; }
+  .herramientas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .herramientas span {
+    font: 12px/1.4 ui-monospace, Consolas, monospace; color: var(--suave);
+    background: var(--chip); border-radius: 999px; padding: 2px 8px;
+  }
+  .sugerencias { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
+  .sugerencias button {
+    font: inherit; font-size: .875rem; color: var(--tinta); background: var(--panel);
+    border: 1px solid var(--borde); border-radius: 999px; padding: 6px 12px; cursor: pointer;
+  }
+  .sugerencias button:hover { border-color: var(--marca); }
+  form { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--borde); }
+  textarea {
+    flex: 1; resize: none; font: inherit; color: var(--tinta); background: var(--panel);
+    border: 1px solid var(--borde); border-radius: 12px; padding: 10px 12px; min-height: 46px; max-height: 140px;
+  }
+  textarea:focus-visible, button:focus-visible { outline: 2px solid var(--marca); outline-offset: 2px; }
+  form button {
+    font: inherit; font-weight: 600; color: var(--marca-tinta); background: var(--marca);
+    border: 0; border-radius: 12px; padding: 0 18px; cursor: pointer;
+  }
+  form button:disabled { opacity: .55; cursor: progress; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Merca · Pedidos a domicilio</h1>
+    <p>Chatbot conectado al catálogo del supermercado mediante un servidor MCP</p>
+  </header>
+
+  <main id="chat" aria-live="polite"></main>
+
+  <div class="sugerencias" id="sugerencias">
+    <button type="button">¿Qué categorías tienen?</button>
+    <button type="button">Muéstrame los lácteos</button>
+    <button type="button">Quiero hacer un pedido</button>
+  </div>
+
+  <form id="formulario">
+    <textarea id="entrada" rows="1" placeholder="Escribe tu pedido…" aria-label="Mensaje" required></textarea>
+    <button id="enviar" type="submit">Enviar</button>
+  </form>
+</div>
+
+<script>
+  const chat = document.getElementById("chat");
+  const entrada = document.getElementById("entrada");
+  const enviar = document.getElementById("enviar");
+  let sesion = null;
+
+  const escapar = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // Markdown mínimo (negritas, listas y párrafos) aplicado sobre texto ya escapado.
+  function formato(texto) {
+    const bloques = escapar(texto).split(/\n{2,}/);
+    return bloques.map((bloque) => {
+      const lineas = bloque.split("\n").filter((l) => !/^\s*(-{3,}|\*{3,})\s*$/.test(l));
+      let html = "", enLista = false;
+      for (let linea of lineas) {
+        linea = linea.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/^#{1,6}\s*/, "");
+        const item = linea.match(/^\s*(?:[-*•]|\d+[.)])\s+(.*)$/);
+        if (item) { if (!enLista) { html += "<ul>"; enLista = true; } html += `<li>${item[1]}</li>`; }
+        else { if (enLista) { html += "</ul>"; enLista = false; } html += `<p>${linea}</p>`; }
+      }
+      return html + (enLista ? "</ul>" : "");
+    }).join("");
+  }
+
+  function agregar(clase, html) {
+    const div = document.createElement("div");
+    div.className = "msg " + clase;
+    div.innerHTML = html;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  async function mandar(mensaje) {
+    agregar("yo", escapar(mensaje));
+    enviar.disabled = true;
+    const espera = agregar("bot", "<p>Escribiendo…</p>");
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sesion, mensaje }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error || "Error " + r.status);
+      sesion = datos.sesion;
+      let html = formato(datos.respuesta);
+      if (datos.herramientas.length) {
+        html += '<div class="herramientas" title="Herramientas MCP que usó el agente">'
+          + datos.herramientas.map((h) => `<span>${escapar(h.nombre)}</span>`).join("") + "</div>";
+      }
+      espera.innerHTML = html;
+    } catch (e) {
+      espera.className = "msg error";
+      espera.textContent = e.message;
+    } finally {
+      enviar.disabled = false;
+      chat.scrollTop = chat.scrollHeight;
+      entrada.focus();
+    }
+  }
+
+  document.getElementById("formulario").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const mensaje = entrada.value.trim();
+    if (!mensaje || enviar.disabled) return;
+    entrada.value = "";
+    entrada.style.height = "";
+    mandar(mensaje);
+  });
+  entrada.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.target.form.requestSubmit(); }
+  });
+  entrada.addEventListener("input", () => {
+    entrada.style.height = "auto";
+    entrada.style.height = Math.min(entrada.scrollHeight, 140) + "px";
+  });
+  document.getElementById("sugerencias").addEventListener("click", (e) => {
+    if (e.target.tagName === "BUTTON" && !enviar.disabled) mandar(e.target.textContent);
+  });
+
+  agregar("bot", "<p>¡Hola! Soy <strong>Merca</strong>. Puedo mostrarte el catálogo y armar tu pedido a domicilio. ¿Qué necesitas hoy?</p>");
+  entrada.focus();
+</script>
+</body>
+</html>
