@@ -1,0 +1,10 @@
+# Archivos temporales de Office (se crean mientras el documento está abierto)
+~$*
+
+# Secretos locales
+.env
+
+# Salidas de compilación y registros
+target/
+logs/
+node_modules/
